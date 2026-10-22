@@ -1,0 +1,79 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My AI Talking Camera</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+</head>
+<body>
+  <h2>My AI Talking Camera</h2>
+  <p id="status">Loading AI model...</p>
+  <video id="camera" autoplay playsinline
+    muted style="width:100%;"></video>
+  <button onclick="startCamera()">Start Camera</button>
+  <button onclick="stopCamera()">Stop Camera</button>
+  <h3 id="result">Objects will appear here</h3>
+
+  <script>
+    let model, stream, running = false, lastSpoken = "";
+
+    async function loadModel() {
+      try {
+        model = await cocoSsd.load();
+        document.getElementById("status").textContent =
+          "AI ready. Open this page through HTTPS to use the camera.";
+      } catch (e) {
+        document.getElementById("status").textContent =
+          "Model failed to load. Check your internet.";
+      }
+    }
+
+    async function startCamera() {
+      try {
+        if (!model) await loadModel();
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }, audio: false
+        });
+        const video = document.getElementById("camera");
+        video.srcObject = stream;
+        await video.play();
+        running = true;
+        detect();
+      } catch (e) {
+        alert("Camera failed. Open this page using an HTTPS website and allow camera permission.");
+      }
+    }
+
+    async function detect() {
+      if (!running || !model) return;
+      const video = document.getElementById("camera");
+      if (video.readyState >= 2) {
+        const predictions = await model.detect(video);
+        if (predictions.length) {
+          const name = predictions[0].class;
+          document.getElementById("result").textContent =
+            "I see: " + predictions.map(p => p.class).join(", ");
+          if (name !== lastSpoken) {
+            speechSynthesis.cancel();
+            speechSynthesis.speak(new SpeechSynthesisUtterance(name));
+            lastSpoken = name;
+          }
+        }
+      }
+      if (running) setTimeout(detect, 800);
+    }
+
+    function stopCamera() {
+      running = false;
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      speechSynthesis.cancel();
+      document.getElementById("camera").srcObject = null;
+      document.getElementById("status").textContent = "Camera stopped.";
+    }
+
+    loadModel();
+  </script>
+</body>
+</html>
